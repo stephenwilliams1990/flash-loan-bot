@@ -13,6 +13,20 @@ contract MyV2FlashLoan is FlashLoanReceiverBase {
 
   using SafeMath for uint256;
 
+  struct Addresses {
+    address DAI_ADDRESS;
+    address WETH_ADDRESS;
+    address UNISWAP_ROUTER_ADDRESS;
+    address SUSHISWAP_ROUTER_ADDRESS;
+  }
+    
+  Addresses constants = Addresses({
+    DAI_ADDRESS : 0x6B175474E89094C44Da98b954EedeAC495271d0F,
+    WETH_ADDRESS : 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2,
+    UNISWAP_ROUTER_ADDRESS : 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D,
+    SUSHISWAP_ROUTER_ADDRESS : 0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
+  });
+   
   IUniswapV2Router02 public uniswapRouter;
   IUniswapV2Router02 public sushiswapRouter;
 
@@ -20,11 +34,12 @@ contract MyV2FlashLoan is FlashLoanReceiverBase {
   IERC20 public WETH_ERC20;
 
   constructor(ILendingPoolAddressesProvider _addressProvider) FlashLoanReceiverBase(_addressProvider) public {
-    sushiswapRouter = IUniswapV2Router02(Constants.SUSHISWAP_ROUTER_ADDRESS);
-    uniswapRouter = IUniswapV2Router02(Constants.UNISWAP_ROUTER_ADDRESS);
+    sushiswapRouter = IUniswapV2Router02(constants.SUSHISWAP_ROUTER_ADDRESS);
+    uniswapRouter = IUniswapV2Router02(constants.UNISWAP_ROUTER_ADDRESS);
 
-    DAI_ERC20 = IERC20(Constants.DAI_ADDRESS);
-    WETH_ERC20 = IERC20(Constants.WETH_ADDRESS);
+    DAI_ERC20 = IERC20(constants.DAI_ADDRESS);
+    WETH_ERC20 = IERC20(constants.WETH_ADDRESS);
+    
   }
 
   /**
@@ -51,22 +66,25 @@ contract MyV2FlashLoan is FlashLoanReceiverBase {
   {
     printBalances();
 
-    address[] memory path = new address[](2);
-    path[0] = Constants.DAI_ADDRESS;
-    path[1] = Constants.WETH_ADDRESS;
+    uint256 startingDAI = DAI_ERC20.balanceOf(address(this));
+    console.log("DAI before trade: ", startingDAI);
 
-    DAI_ERC20.approve(Constants.UNISWAP_ROUTER_ADDRESS, loanSize);
+    address[] memory path = new address[](2);
+    path[0] = constants.DAI_ADDRESS;
+    path[1] = constants.WETH_ADDRESS;
+
+    DAI_ERC20.approve(constants.UNISWAP_ROUTER_ADDRESS, loanSize);
     uniswapRouter.swapExactTokensForTokens(loanSize, 0, path, address(this), block.timestamp + 5);
 
     printBalances();
 
     address[] memory revPath = new address[](2);
-    revPath[0] = Constants.WETH_ADDRESS;
-    revPath[1] = Constants.DAI_ADDRESS;
+    revPath[0] = constants.WETH_ADDRESS;
+    revPath[1] = constants.DAI_ADDRESS;
 
     uint256 WETHBalance = WETH_ERC20.balanceOf(address(this));
 
-    WETH_ERC20.approve(Constants.SUSHISWAP_ROUTER_ADDRESS, WETHBalance);
+    WETH_ERC20.approve(constants.SUSHISWAP_ROUTER_ADDRESS, WETHBalance);
     sushiswapRouter.swapExactTokensForTokens(WETHBalance, 0, revPath, address(this), block.timestamp + 5);
 
     printBalances();
@@ -76,6 +94,11 @@ contract MyV2FlashLoan is FlashLoanReceiverBase {
       IERC20(assets[i]).approve(address(LENDING_POOL), amountOwing);
     }
 
+    uint256 finalDAI = DAI_ERC20.balanceOf(address(this));
+    console.log("DAI after trade: ", finalDAI);
+
+    require(finalDAI > startingDAI, "Trade not profitable");
+
     return true;
   }
 
@@ -83,7 +106,7 @@ contract MyV2FlashLoan is FlashLoanReceiverBase {
     address receiverAddress = address(this);
 
     address[] memory assets = new address[](1);
-    assets[0] = address(Constants.DAI_ADDRESS);
+    assets[0] = address(constants.DAI_ADDRESS);
 
     uint256[] memory amounts = new uint256[](1);
     amounts[0] = loanSize;
